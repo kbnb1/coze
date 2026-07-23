@@ -83,56 +83,56 @@
     }
 
     @variant dark {
-      /* Base Colors */
-      --background: #09090b;
-      --foreground: var(--snow);
+      /* Base Colors - Cyber Tech */
+      --background: #0A0A0F;
+      --foreground: #EAEAEA;
 
       /* Surface: Used for non-overlay components (cards, accordions, disclosure groups) */
-      --surface: oklch(0.2103 0.0059 285.89);
-      --surface-foreground: var(--foreground);
+      --surface: #12121A;
+      --surface-foreground: #EAEAEA;
 
-      /* Overlay: Used for floating/overlay components (dialogs, popovers, modals, menus) - lighter for contrast */
-      --overlay: oklch(0.2103 0.0059 285.89);
-      --overlay-foreground: var(--foreground);
+      /* Overlay: Used for floating/overlay components (dialogs, popovers, modals, menus) */
+      --overlay: #1A1A28;
+      --overlay-foreground: #EAEAEA;
 
-      --muted: oklch(70.5% 0.015 286.067);
+      --muted: #555570;
 
-      --default: oklch(27.4% 0.006 286.033);
-      --default-foreground: var(--snow);
+      --default: #1E1E2E;
+      --default-foreground: #EAEAEA;
 
-      --accent: oklch(0.6204 0.195 253.83);
-      --accent-foreground: var(--snow);
+      --accent: #00F0FF;
+      --accent-foreground: #0A0A0F;
 
-      /* Form Field Defaults - Colors (only the ones that are different from light theme) */
-      --field-background: oklch(0.2103 0.0059 285.89);
-      --field-foreground: var(--foreground);
-      --field-placeholder: var(--muted);
-      --field-border: transparent; /* no border by default on form fields */
+      /* Form Field Defaults - Colors */
+      --field-background: #12121A;
+      --field-foreground: #EAEAEA;
+      --field-placeholder: #555570;
+      --field-border: rgba(0,240,255,0.15);
 
       /* Status Colors */
-      --success: oklch(0.7329 0.1935 150.81);
-      --success-foreground: var(--eclipse);
+      --success: #00FF88;
+      --success-foreground: #0A0A0F;
 
-      --warning: oklch(0.8203 0.1388 76.34);
-      --warning-foreground: var(--eclipse);
+      --warning: #FFB800;
+      --warning-foreground: #0A0A0F;
 
-      --danger: oklch(0.594 0.1967 24.63);
-      --danger-foreground: var(--snow);
+      --danger: #FF003C;
+      --danger-foreground: #EAEAEA;
 
       /* Component Colors */
-      --segment: oklch(0.3964 0.01 285.93);
-      --segment-foreground: var(--foreground);
+      --segment: #1E1E2E;
+      --segment-foreground: #EAEAEA;
 
       /* Misc Colors */
-      --border: oklch(28% 0.006 286.033);
-      --separator: oklch(40% 0.006 286.033);
-      --focus: var(--accent);
-      --link: var(--foreground);
+      --border: rgba(0,240,255,0.15);
+      --separator: rgba(0,240,255,0.08);
+      --focus: #00F0FF;
+      --link: #00F0FF;
 
       /* Shadows */
-      --surface-shadow: 0 0 0 0 transparent inset; /* No shadow on dark mode */
-      --overlay-shadow: 0 0 1px 0 rgba(255, 255, 255, 0.2) inset;
-      --field-shadow: 0 0 0 0 transparent inset; /* Transparent shadow to allow ring utilities to work */
+      --surface-shadow: 0 0 16px 0 rgba(0,240,255,0.06);
+      --overlay-shadow: 0 0 1px 0 rgba(0,240,255,0.2) inset;
+      --field-shadow: 0 0 8px 0 rgba(0,240,255,0.04);
     }
   }
 }

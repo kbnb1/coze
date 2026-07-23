@@ -1,55 +1,105 @@
-// @ts-nocheck
-/**
- * 通用认证上下文
- *
- * 基于固定的 API 接口实现，可复用到其他项目
- * 其他项目使用时，只需修改 @api 的导入路径指向项目的 api 模块
- *
- * 注意：
- * - 如果需要登录/鉴权场景，请扩展本文件，完善 login/logout、token 管理、用户信息获取与刷新等逻辑
- * - 将示例中的占位实现替换为项目实际的接口调用与状态管理
- */
-import React, { createContext, useContext, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiRequest } from '@/utils/api';
 
-interface UserOut {
-
+interface User {
+  id: number;
+  username: string;
+  phone: string | null;
+  role: string;
+  status: string;
+  balance: number;
 }
 
 interface AuthContextType {
-  user: UserOut | null;
+  user: User | null;
   token: string | null;
-  isAuthenticated: boolean;
   isLoading: boolean;
-  login: (token: string) => Promise<void>;
-  logout: () => Promise<void>;
-  updateUser: (userData: Partial<UserOut>) => void;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string, phone?: string) => Promise<void>;
+  logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const value: AuthContextType = {
-    user: null,
-    token: null,
-    isAuthenticated: false,
-    isLoading: false,
+const TOKEN_KEY = 'shieldlink_token';
+const USER_KEY = 'shieldlink_user';
 
-    // 登录逻辑，根据项目实际情况实现
-    login: async (token: string) => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-    // 登出逻辑，根据项目实际情况实现
-    logout: async () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  useEffect(() => {
+    (async () => {
+      try {
+        const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+        const storedUser = await AsyncStorage.getItem(USER_KEY);
+        if (storedToken && storedUser) {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+        }
+      } catch {
+        // ignore
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, []);
 
-    // 更新用户信息，根据项目实际情况实现
-    updateUser: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
-  };
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+  const login = useCallback(async (username: string, password: string) => {
+    const data = await apiRequest<{ token: string; user: User }>('/auth/login', {
+      method: 'POST',
+      body: { username, password },
+    });
+    await AsyncStorage.setItem(TOKEN_KEY, data.token);
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setToken(data.token);
+    setUser(data.user);
+  }, []);
 
-export const useAuth = (): AuthContextType => {
+  const register = useCallback(async (username: string, password: string, phone?: string) => {
+    const data = await apiRequest<{ token: string; user: User }>('/auth/register', {
+      method: 'POST',
+      body: { username, password, phone },
+    });
+    await AsyncStorage.setItem(TOKEN_KEY, data.token);
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setToken(data.token);
+    setUser(data.user);
+  }, []);
+
+  const logout = useCallback(async () => {
+    await AsyncStorage.removeItem(TOKEN_KEY);
+    await AsyncStorage.removeItem(USER_KEY);
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await apiRequest<{ user: User }>('/auth/me', { token });
+      setUser(data.user);
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    } catch {
+      // token expired
+      await logout();
+    }
+  }, [token, logout]);
+
+  return (
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
-};
+}
