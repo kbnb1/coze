@@ -1,11 +1,10 @@
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, FlatList, Image, ActivityIndicator, TextInput } from 'react-native';
-import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { View, Text, Pressable, StyleSheet, ScrollView, Image, TextInput, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiRequest } from '@/utils/api';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { API_BASE_URL } from '@/utils/api';
 
 interface GameAccount {
   id: number;
@@ -20,419 +19,283 @@ interface GameAccount {
   status: string;
 }
 
+const GAMES = ['全部', '王者荣耀', '和平精英', '原神', '英雄联盟', '永劫无间', '穿越火线'];
+
 export default function HomeScreen() {
   const router = useSafeRouter();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
   const [accounts, setAccounts] = useState<GameAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchText, setSearchText] = useState('');
-  const [selectedGame, setSelectedGame] = useState<string | null>(null);
-
-  const games = ['全部', '王者荣耀', '和平精英', '原神', '英雄联盟', '永劫无间', '穿越火线'];
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedGame, setSelectedGame] = useState('全部');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchAccounts = useCallback(async () => {
     try {
-      setLoading(true);
-      let endpoint = '/accounts';
-      if (selectedGame && selectedGame !== '全部') {
-        endpoint = `/accounts/search?game=${encodeURIComponent(selectedGame)}`;
-      }
-      const data = await apiRequest<{ accounts: GameAccount[] }>(endpoint);
-      setAccounts(data.accounts);
+      let url = `${API_BASE_URL}/accounts`;
+      const params: string[] = [];
+      if (selectedGame !== '全部') params.push(`game_name=${encodeURIComponent(selectedGame)}`);
+      if (searchQuery.trim()) params.push(`q=${encodeURIComponent(searchQuery.trim())}`);
+      if (params.length > 0) url += `?${params.join('&')}`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+      setAccounts(data.accounts || []);
     } catch {
       // ignore
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [selectedGame]);
+  }, [selectedGame, searchQuery]);
 
   useFocusEffect(
     useCallback(() => {
+      setLoading(true);
       fetchAccounts();
     }, [fetchAccounts])
   );
 
-  const filteredAccounts = searchText
-    ? accounts.filter(a =>
-        a.game_name.includes(searchText) ||
-        a.rank_info?.includes(searchText) ||
-        a.description?.includes(searchText)
-      )
-    : accounts;
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchAccounts();
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'available': return '#22C55E';
+      case 'in_use': return '#F59E0B';
+      case 'maintenance': return '#EF4444';
+      default: return '#6B7280';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'available': return '可租用';
+      case 'in_use': return '使用中';
+      case 'maintenance': return '维护中';
+      default: return status;
+    }
+  };
 
   const renderAccountCard = ({ item }: { item: GameAccount }) => (
     <Pressable
       style={styles.card}
-      onPress={() => router.push('/account-detail', { accountId: item.id })}
+      onPress={() => router.push('/account-detail', { id: item.id })}
     >
       <View style={styles.cardHeader}>
-        {item.game_icon ? (
-          <Image source={{ uri: item.game_icon }} style={styles.gameIcon} />
-        ) : (
-          <View style={styles.gameIconPlaceholder}>
-            <Text style={styles.gameIconText}>{item.game_name[0]}</Text>
-          </View>
-        )}
-        <View style={styles.cardInfo}>
+        <Image
+          source={{ uri: item.game_icon || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=100' }}
+          style={styles.gameIcon}
+        />
+        <View style={styles.cardHeaderInfo}>
           <Text style={styles.gameName}>{item.game_name}</Text>
-          <Text style={styles.serverInfo}>{item.server_name || '未知区服'}</Text>
+          <Text style={styles.serverName}>{item.server_name || '未知区服'}</Text>
         </View>
-        <View style={styles.priceArea}>
-          <Text style={styles.priceValue}>{item.price_per_hour}</Text>
-          <Text style={styles.priceUnit}>/时</Text>
+        <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.status)}15` }]}>
+          <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
+          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+            {getStatusText(item.status)}
+          </Text>
         </View>
       </View>
 
       <View style={styles.cardBody}>
-        <View style={styles.rankBadge}>
-          <Text style={styles.rankText}>{item.rank_info || '未知段位'}</Text>
-        </View>
-        {item.deposit > 0 && (
-          <View style={styles.depositBadge}>
-            <Text style={styles.depositText}>押金 ¥{item.deposit}</Text>
-          </View>
-        )}
+        <Text style={styles.rankInfo}>{item.rank_info || '暂无段位信息'}</Text>
+        {item.description ? (
+          <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
+        ) : null}
       </View>
 
-      {item.description ? (
-        <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
-      ) : null}
-
       <View style={styles.cardFooter}>
-        <View style={styles.statusBadge}>
-          <View style={styles.statusDot} />
-          <Text style={styles.statusText}>可租用</Text>
+        <View style={styles.priceBox}>
+          <Text style={styles.priceValue}>¥{item.price_per_hour}</Text>
+          <Text style={styles.priceUnit}>/小时</Text>
         </View>
         <Pressable
-          style={styles.rentButton}
-          onPress={() => router.push('/account-detail', { accountId: item.id })}
+          style={[styles.launchBtn, item.status !== 'available' && styles.launchBtnDisabled]}
+          onPress={() => {
+            if (item.status === 'available') {
+              router.push('/launch', { accountId: item.id });
+            }
+          }}
+          disabled={item.status !== 'available'}
         >
-          <Text style={styles.rentButtonText}>立即上号</Text>
+          <Text style={styles.launchBtnText}>
+            {item.status === 'available' ? '立即上号' : '暂不可用'}
+          </Text>
         </Pressable>
       </View>
     </Pressable>
   );
 
   return (
-    <Screen backgroundColor="#0A0A0F" statusBarStyle="light" safeAreaEdges={['left', 'right', 'bottom']}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerTop}>
+    <Screen backgroundColor="#0B0E1A" statusBarStyle="light">
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>SHIELDLINK</Text>
-            <Text style={styles.headerSubtitle}>安全上号平台</Text>
+            <Text style={styles.greeting}>Hi, {user?.username || 'Player'}</Text>
+            <Text style={styles.headerSubtitle}>选择账号，安全上号</Text>
           </View>
-          <View style={styles.balanceBadge}>
-            <Text style={styles.balanceLabel}>BALANCE</Text>
-            <Text style={styles.balanceValue}>¥{user?.balance?.toFixed(2) || '0.00'}</Text>
+          <View style={styles.balanceBox}>
+            <Text style={styles.balanceLabel}>余额</Text>
+            <Text style={styles.balanceValue}>¥{user?.balance?.toFixed(0) || '0'}</Text>
           </View>
         </View>
 
         {/* Search */}
-        <View style={styles.searchBar}>
+        <View style={styles.searchBox}>
+          <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="搜索游戏/段位..."
-            placeholderTextColor="#555570"
-            value={searchText}
-            onChangeText={setSearchText}
+            placeholder="搜索游戏账号..."
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            value={searchQuery}
+            onChangeText={(text) => { setSearchQuery(text); fetchAccounts(); }}
+            returnKeyLabel="search"
           />
         </View>
 
-        {/* Game filter tabs */}
-        <View style={styles.gameTabs}>
-          {games.map(game => (
+        {/* Game Filter */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterContainer}
+        >
+          {GAMES.map((game) => (
             <Pressable
               key={game}
-              style={[
-                styles.gameTab,
-                (selectedGame === game || (game === '全部' && !selectedGame)) && styles.gameTabActive,
-              ]}
-              onPress={() => setSelectedGame(game === '全部' ? null : game)}
+              style={[styles.filterChip, selectedGame === game && styles.filterChipActive]}
+              onPress={() => { setSelectedGame(game); setLoading(true); fetchAccounts(); }}
             >
-              <Text
-                style={[
-                  styles.gameTabText,
-                  (selectedGame === game || (game === '全部' && !selectedGame)) && styles.gameTabTextActive,
-                ]}
-              >
+              <Text style={[styles.filterChipText, selectedGame === game && styles.filterChipTextActive]}>
                 {game}
               </Text>
             </Pressable>
           ))}
-        </View>
-      </View>
+        </ScrollView>
 
-      {/* Content */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color="#00F0FF" size="large" />
-          <Text style={styles.loadingText}>LOADING...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredAccounts}
-          renderItem={renderAccountCard}
-          keyExtractor={item => item.id.toString()}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>暂无可用账号</Text>
-            </View>
-          }
-        />
-      )}
+        {/* Account List */}
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color="#6366F1" size="large" />
+          </View>
+        ) : (
+          <FlatList
+            data={accounts}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderAccountCard}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor="#6366F1"
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyText}>暂无可用账号</Text>
+              </View>
+            }
+          />
+        )}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1 },
   header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: '#0A0A0F',
-  },
-  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    paddingBottom: 16,
   },
-  headerTitle: {
-    color: '#00F0FF',
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: 4,
+  greeting: { color: '#FFFFFF', fontSize: 22, fontWeight: '700' },
+  headerSubtitle: { color: 'rgba(255,255,255,0.45)', fontSize: 13, marginTop: 4 },
+  balanceBox: {
+    backgroundColor: 'rgba(99,102,241,0.12)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
-  headerSubtitle: {
-    color: '#555570',
-    fontSize: 11,
-    letterSpacing: 2,
-    marginTop: 2,
-  },
-  balanceBadge: {
-    backgroundColor: '#12121A',
-    borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.15)',
-    borderRadius: 8,
+  balanceLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11 },
+  balanceValue: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginTop: 2 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
     paddingHorizontal: 14,
+    height: 44,
+  },
+  searchIcon: { fontSize: 16, marginRight: 8 },
+  searchInput: { flex: 1, color: '#FFFFFF', fontSize: 14 },
+  filterContainer: { paddingHorizontal: 20, gap: 8, marginBottom: 12 },
+  filterChip: {
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    alignItems: 'flex-end',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  balanceLabel: {
-    color: '#555570',
-    fontSize: 9,
-    letterSpacing: 2,
-    fontWeight: '600',
-  },
-  balanceValue: {
-    color: '#00FF88',
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  searchBar: {
-    marginBottom: 12,
-  },
-  searchInput: {
-    backgroundColor: '#12121A',
-    borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.12)',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: '#EAEAEA',
-    fontSize: 14,
-  },
-  gameTabs: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  gameTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#12121A',
-    borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.08)',
-  },
-  gameTabActive: {
-    backgroundColor: 'rgba(0,240,255,0.1)',
-    borderColor: '#00F0FF',
-  },
-  gameTabText: {
-    color: '#555570',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  gameTabTextActive: {
-    color: '#00F0FF',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 100,
-  },
+  filterChipActive: { backgroundColor: '#6366F1' },
+  filterChipText: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500' },
+  filterChipTextActive: { color: '#FFFFFF', fontWeight: '600' },
+  listContent: { paddingHorizontal: 20, paddingBottom: 100, gap: 12 },
+  loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
+  emptyBox: { alignItems: 'center', paddingTop: 80 },
+  emptyText: { color: 'rgba(255,255,255,0.3)', fontSize: 14 },
   card: {
-    backgroundColor: '#12121A',
-    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.06)',
     padding: 16,
-    marginBottom: 12,
-    shadowColor: '#00F0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
   },
-  cardHeader: {
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  gameIcon: { width: 44, height: 44, borderRadius: 10 },
+  cardHeaderInfo: { flex: 1, marginLeft: 12 },
+  gameName: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  serverName: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 2 },
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  gameIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-  },
-  gameIconPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,240,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  gameIconText: {
-    color: '#00F0FF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  cardInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  gameName: {
-    color: '#EAEAEA',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  serverInfo: {
-    color: '#555570',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  priceArea: {
-    alignItems: 'flex-end',
-  },
-  priceValue: {
-    color: '#00F0FF',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  priceUnit: {
-    color: '#555570',
-    fontSize: 11,
-  },
-  cardBody: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  rankBadge: {
-    backgroundColor: 'rgba(191,0,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(191,0,255,0.3)',
-    borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 8,
   },
-  rankText: {
-    color: '#BF00FF',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  depositBadge: {
-    backgroundColor: 'rgba(0,255,136,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,255,136,0.2)',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  depositText: {
-    color: '#00FF88',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  description: {
-    color: '#555570',
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
+  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  statusText: { fontSize: 11, fontWeight: '600' },
+  cardBody: { marginBottom: 12 },
+  rankInfo: { color: '#F59E0B', fontSize: 13, fontWeight: '600' },
+  description: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 6, lineHeight: 18 },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,240,255,0.06)',
     paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  priceBox: { flexDirection: 'row', alignItems: 'baseline' },
+  priceValue: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
+  priceUnit: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginLeft: 2 },
+  launchBtn: {
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#00FF88',
-  },
-  statusText: {
-    color: '#00FF88',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
-  rentButton: {
-    backgroundColor: '#00F0FF',
-    borderRadius: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    shadowColor: '#00F0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  rentButtonText: {
-    color: '#0A0A0F',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#555570',
-    fontSize: 11,
-    letterSpacing: 3,
-    marginTop: 12,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingTop: 60,
-  },
-  emptyText: {
-    color: '#555570',
-    fontSize: 14,
-  },
+  launchBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  launchBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
 });

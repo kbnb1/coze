@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,8 +13,25 @@ export default function ProfileScreen() {
     }, [refreshUser])
   );
 
+  const handleLogout = () => {
+    Alert.alert(
+      '退出登录',
+      '确定要退出登录吗？',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '确定',
+          style: 'destructive',
+          onPress: () => {
+            logout();
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+    <Screen backgroundColor="#0B0E1A" statusBarStyle="light">
       <ScrollView contentContainerStyle={styles.container}>
         {/* Profile header */}
         <View style={styles.profileHeader}>
@@ -23,21 +40,21 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.username}>{user?.username || 'Unknown'}</Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{user?.role === 'admin' ? 'ADMIN' : 'USER'}</Text>
+            <Text style={styles.roleText}>{user?.role === 'admin' ? '管理员' : '普通用户'}</Text>
           </View>
         </View>
 
         {/* Balance card */}
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>ACCOUNT BALANCE</Text>
-          <Text style={styles.balanceValue}>¥{user?.balance?.toFixed(2) || '0.00'}</Text>
-          <View style={styles.balanceGlow} />
+          <View style={styles.balanceRow}>
+            <Text style={styles.balanceLabel}>账户余额</Text>
+            <Text style={styles.balanceValue}>¥{user?.balance?.toFixed(2) || '0.00'}</Text>
+          </View>
         </View>
 
         {/* Info section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ACCOUNT INFO</Text>
-
+          <Text style={styles.sectionTitle}>账户信息</Text>
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>用户ID</Text>
@@ -61,48 +78,57 @@ export default function ProfileScreen() {
 
         {/* Security section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SECURITY</Text>
-
+          <Text style={styles.sectionTitle}>安全保障</Text>
           <View style={styles.securityCard}>
             <View style={styles.securityItem}>
-              <View style={styles.securityIcon}>
-                <Text style={styles.securityIconText}>S</Text>
+              <View style={styles.securityIconBox}>
+                <Text style={styles.securityIcon}>🛡</Text>
               </View>
               <View style={styles.securityInfo}>
-                <Text style={styles.securityTitle}>设备安全</Text>
-                <Text style={styles.securityDesc}>设备环境已检测</Text>
+                <Text style={styles.securityTitle}>设备安全检测</Text>
+                <Text style={styles.securityDesc}>Root/模拟器/悬浮窗/可疑进程</Text>
               </View>
-              <View style={styles.securityStatus}>
-                <Text style={styles.securityOk}>OK</Text>
+              <View style={styles.securityOkBadge}>
+                <Text style={styles.securityOkText}>已启用</Text>
               </View>
             </View>
-
             <View style={styles.securityDivider} />
-
             <View style={styles.securityItem}>
-              <View style={[styles.securityIcon, { backgroundColor: 'rgba(0,255,136,0.1)' }]}>
-                <Text style={[styles.securityIconText, { color: '#00FF88' }]}>P</Text>
+              <View style={[styles.securityIconBox, { backgroundColor: 'rgba(34,197,94,0.1)' }]}>
+                <Text style={styles.securityIcon}>🔒</Text>
               </View>
               <View style={styles.securityInfo}>
-                <Text style={styles.securityTitle}>隐私保护</Text>
-                <Text style={styles.securityDesc}>账号密码加密存储</Text>
+                <Text style={styles.securityTitle}>加密传输</Text>
+                <Text style={styles.securityDesc}>账号密码加密存储，安全传输</Text>
               </View>
-              <View style={styles.securityStatus}>
-                <Text style={styles.securityOk}>OK</Text>
+              <View style={styles.securityOkBadge}>
+                <Text style={styles.securityOkText}>已启用</Text>
+              </View>
+            </View>
+            <View style={styles.securityDivider} />
+            <View style={styles.securityItem}>
+              <View style={[styles.securityIconBox, { backgroundColor: 'rgba(245,158,11,0.1)' }]}>
+                <Text style={styles.securityIcon}>⚡</Text>
+              </View>
+              <View style={styles.securityInfo}>
+                <Text style={styles.securityTitle}>自动拒绝外挂</Text>
+                <Text style={styles.securityDesc}>检测到风险设备自动拒绝授权</Text>
+              </View>
+              <View style={styles.securityOkBadge}>
+                <Text style={styles.securityOkText}>已启用</Text>
               </View>
             </View>
           </View>
         </View>
 
         {/* Logout button */}
-        <Pressable style={styles.logoutButton} onPress={logout}>
+        <Pressable style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>退出登录</Text>
         </Pressable>
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>SHIELDLINK v1.0.0</Text>
-          <Text style={styles.footerSubtext}>Secure Gaming Platform</Text>
+          <Text style={styles.footerText}>游戏安全上号器 v1.0.0</Text>
         </View>
       </ScrollView>
     </Screen>
@@ -111,7 +137,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 40,
   },
@@ -123,115 +149,91 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
+    backgroundColor: 'rgba(99,102,241,0.15)',
     borderWidth: 2,
-    borderColor: '#00F0FF',
+    borderColor: 'rgba(99,102,241,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,240,255,0.05)',
-    shadowColor: '#00F0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
   },
   avatarText: {
-    color: '#00F0FF',
+    color: '#6366F1',
     fontSize: 28,
     fontWeight: '800',
   },
   username: {
-    color: '#EAEAEA',
+    color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
     marginTop: 12,
   },
   roleBadge: {
-    backgroundColor: 'rgba(191,0,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(191,0,255,0.3)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(99,102,241,0.1)',
     paddingHorizontal: 12,
     paddingVertical: 4,
+    borderRadius: 8,
     marginTop: 8,
   },
   roleText: {
-    color: '#BF00FF',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2,
+    color: '#6366F1',
+    fontSize: 12,
+    fontWeight: '600',
   },
   balanceCard: {
-    backgroundColor: '#12121A',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.15)',
-    padding: 24,
-    alignItems: 'center',
+    backgroundColor: 'rgba(99,102,241,0.08)',
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 24,
-    shadowColor: '#00F0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   balanceLabel: {
-    color: '#555570',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 14,
   },
   balanceValue: {
-    color: '#00FF88',
-    fontSize: 36,
-    fontWeight: '800',
-    marginTop: 8,
-  },
-  balanceGlow: {
-    width: 40,
-    height: 2,
-    backgroundColor: '#00FF88',
-    borderRadius: 1,
-    marginTop: 12,
-    shadowColor: '#00FF88',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '700',
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
-    color: '#555570',
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 3,
+    letterSpacing: 1,
+    marginBottom: 12,
     textTransform: 'uppercase',
-    marginBottom: 10,
   },
   infoCard: {
-    backgroundColor: '#12121A',
-    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.06)',
     padding: 16,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
+  },
+  infoLabel: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 14,
+  },
+  infoValue: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
   },
   infoDivider: {
     height: 1,
-    backgroundColor: 'rgba(0,240,255,0.04)',
-  },
-  infoLabel: {
-    color: '#555570',
-    fontSize: 13,
-  },
-  infoValue: {
-    color: '#EAEAEA',
-    fontSize: 13,
-    fontWeight: '600',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   statusBadge: {
     flexDirection: 'row',
@@ -242,98 +244,85 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#00FF88',
+    backgroundColor: '#22C55E',
   },
   statusText: {
-    color: '#00FF88',
-    fontSize: 12,
-    fontWeight: '600',
+    color: '#22C55E',
+    fontSize: 13,
+    fontWeight: '500',
   },
   securityCard: {
-    backgroundColor: '#12121A',
-    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.06)',
     padding: 16,
   },
   securityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
-  securityIcon: {
+  securityIconBox: {
     width: 40,
     height: 40,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,240,255,0.1)',
+    borderRadius: 10,
+    backgroundColor: 'rgba(99,102,241,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  securityIconText: {
-    color: '#00F0FF',
-    fontSize: 16,
-    fontWeight: '700',
+  securityIcon: {
+    fontSize: 18,
   },
   securityInfo: {
     flex: 1,
     marginLeft: 12,
   },
   securityTitle: {
-    color: '#EAEAEA',
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
   },
   securityDesc: {
-    color: '#555570',
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
     marginTop: 2,
   },
-  securityStatus: {
+  securityOkBadge: {
+    backgroundColor: 'rgba(34,197,94,0.1)',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: 'rgba(0,255,136,0.08)',
     borderRadius: 6,
   },
-  securityOk: {
-    color: '#00FF88',
+  securityOkText: {
+    color: '#22C55E',
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
+    fontWeight: '600',
   },
   securityDivider: {
     height: 1,
-    backgroundColor: 'rgba(0,240,255,0.04)',
-    marginVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   logoutButton: {
+    backgroundColor: 'rgba(239,68,68,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,0,60,0.3)',
-    borderRadius: 8,
+    borderColor: 'rgba(239,68,68,0.2)',
+    borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 16,
-    backgroundColor: 'rgba(255,0,60,0.03)',
+    marginTop: 8,
   },
   logoutText: {
-    color: '#FF003C',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
+    color: '#EF4444',
+    fontSize: 15,
+    fontWeight: '600',
   },
   footer: {
     alignItems: 'center',
     marginTop: 32,
   },
   footerText: {
-    color: '#555570',
-    fontSize: 11,
-    letterSpacing: 2,
-  },
-  footerSubtext: {
-    color: '#333348',
-    fontSize: 10,
-    letterSpacing: 1,
-    marginTop: 4,
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 12,
   },
 });
