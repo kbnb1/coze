@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
-import { Screen } from '@/components/Screen';
-import { API_BASE_URL } from '@/utils/api';
 import { useFocusEffect } from 'expo-router';
+import { Screen } from '@/components/Screen';
+import { apiRequest } from '@/utils/api';
 
 interface AccountDetail {
   id: number;
@@ -20,28 +20,31 @@ interface AccountDetail {
 
 export default function AccountDetailScreen() {
   const router = useSafeRouter();
-  const { id } = useSafeSearchParams<{ id: number }>();
+  const { accountId } = useSafeSearchParams<{ accountId: number }>();
   const [account, setAccount] = useState<AccountDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [duration, setDuration] = useState(1);
 
   useFocusEffect(
     useCallback(() => {
-      if (!id) return;
-      fetch(`${API_BASE_URL}/accounts/${id}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.account) setAccount(data.account);
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }, [id])
+      (async () => {
+        try {
+          const data = await apiRequest<{ account: AccountDetail }>(`/accounts/${accountId}`);
+          setAccount(data.account);
+        } catch {
+          // ignore
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, [accountId])
   );
 
   if (loading) {
     return (
-      <Screen backgroundColor="#0B0E1A" statusBarStyle="light">
-        <View style={styles.loadingBox}>
-          <ActivityIndicator color="#6366F1" size="large" />
+      <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color="#00F0FF" size="large" />
         </View>
       </Screen>
     );
@@ -49,213 +52,278 @@ export default function AccountDetailScreen() {
 
   if (!account) {
     return (
-      <Screen backgroundColor="#0B0E1A" statusBarStyle="light">
-        <View style={styles.loadingBox}>
+      <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+        <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>账号不存在</Text>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={styles.backBtnText}>返回</Text>
-          </Pressable>
         </View>
       </Screen>
     );
   }
 
+  const totalPrice = account.price_per_hour * duration + account.deposit;
+
   return (
-    <Screen backgroundColor="#0B0E1A" statusBarStyle="light">
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={10}>
-            <Text style={styles.backArrow}>←</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>账号详情</Text>
-          <View style={{ width: 24 }} />
+    <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+      <ScrollView contentContainerStyle={styles.container}>
+        {/* Back button */}
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Text style={styles.backText}>{'< BACK'}</Text>
+        </Pressable>
+
+        {/* Hero section */}
+        <View style={styles.hero}>
+          {account.game_icon ? (
+            <Image source={{ uri: account.game_icon }} style={styles.heroImage} />
+          ) : (
+            <View style={styles.heroImagePlaceholder}>
+              <Text style={styles.heroImageText}>{account.game_name[0]}</Text>
+            </View>
+          )}
+          <View style={styles.heroInfo}>
+            <Text style={styles.gameName}>{account.game_name}</Text>
+            <Text style={styles.serverName}>{account.server_name || '未知区服'}</Text>
+            <View style={styles.rankBadge}>
+              <Text style={styles.rankText}>{account.rank_info || '未知段位'}</Text>
+            </View>
+          </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Game Info */}
-          <View style={styles.gameCard}>
-            <Image
-              source={{ uri: account.game_icon || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=200' }}
-              style={styles.gameIcon}
-            />
-            <View style={styles.gameInfo}>
-              <Text style={styles.gameName}>{account.game_name}</Text>
-              <Text style={styles.serverName}>{account.server_name || '未知区服'}</Text>
-              <View style={[styles.statusBadge, {
-                backgroundColor: account.status === 'available' ? 'rgba(34,197,94,0.12)' : 'rgba(245,158,11,0.12)',
-              }]}>
-                <View style={[styles.statusDot, {
-                  backgroundColor: account.status === 'available' ? '#22C55E' : '#F59E0B',
-                }]} />
-                <Text style={[styles.statusText, {
-                  color: account.status === 'available' ? '#22C55E' : '#F59E0B',
-                }]}>
-                  {account.status === 'available' ? '可租用' : '使用中'}
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Description */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ACCOUNT INFO</Text>
+          <Text style={styles.description}>{account.description || '暂无描述'}</Text>
+        </View>
+
+        {/* Duration selector */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>RENTAL DURATION</Text>
+          <View style={styles.durationRow}>
+            {[1, 2, 3, 5, 8].map(h => (
+              <Pressable
+                key={h}
+                style={[styles.durationBtn, duration === h && styles.durationBtnActive]}
+                onPress={() => setDuration(h)}
+              >
+                <Text style={[styles.durationText, duration === h && styles.durationTextActive]}>
+                  {h}小时
                 </Text>
-              </View>
-            </View>
+              </Pressable>
+            ))}
           </View>
-
-          {/* Details */}
-          <View style={styles.detailCard}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>账号</Text>
-              <Text style={styles.detailValue}>{account.account_name}</Text>
-            </View>
-            <View style={styles.detailDivider} />
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>段位</Text>
-              <Text style={styles.detailValueHighlight}>{account.rank_info || '暂无'}</Text>
-            </View>
-            <View style={styles.detailDivider} />
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>押金</Text>
-              <Text style={styles.detailValue}>¥{Number(account.deposit).toFixed(2)}</Text>
-            </View>
-          </View>
-
-          {/* Description */}
-          {account.description ? (
-            <View style={styles.descCard}>
-              <Text style={styles.descTitle}>账号描述</Text>
-              <Text style={styles.descText}>{account.description}</Text>
-            </View>
-          ) : null}
-
-          {/* Price */}
-          <View style={styles.priceCard}>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>租用价格</Text>
-              <View style={styles.priceValueBox}>
-                <Text style={styles.priceCurrency}>¥</Text>
-                <Text style={styles.priceAmount}>{account.price_per_hour}</Text>
-                <Text style={styles.priceUnit}>/小时</Text>
-              </View>
-            </View>
-          </View>
-        </ScrollView>
-
-        {/* Bottom Action */}
-        <View style={styles.bottomBar}>
-          <Pressable
-            style={[styles.launchBtn, account.status !== 'available' && styles.launchBtnDisabled]}
-            onPress={() => {
-              if (account.status === 'available') {
-                router.push('/launch', { accountId: account.id });
-              }
-            }}
-            disabled={account.status !== 'available'}
-          >
-            <Text style={styles.launchBtnText}>
-              {account.status === 'available' ? '立即上号' : '暂不可用'}
-            </Text>
-          </Pressable>
         </View>
-      </View>
+
+        {/* Price breakdown */}
+        <View style={styles.priceSection}>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>租金</Text>
+            <Text style={styles.priceValue}>¥{account.price_per_hour} x {duration}小时</Text>
+          </View>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>押金</Text>
+            <Text style={styles.priceValue}>¥{account.deposit}</Text>
+          </View>
+          <View style={styles.priceDivider} />
+          <View style={styles.priceRow}>
+            <Text style={styles.totalLabel}>合计</Text>
+            <Text style={styles.totalValue}>¥{totalPrice.toFixed(2)}</Text>
+          </View>
+        </View>
+
+        {/* Launch button */}
+        <Pressable
+          style={styles.launchButton}
+          onPress={() => router.push('/launch', { accountId: account.id, duration })}
+        >
+          <Text style={styles.launchButtonText}>安全上号</Text>
+        </Pressable>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  errorText: { color: 'rgba(255,255,255,0.5)', fontSize: 16, marginBottom: 16 },
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#FF003C',
+    fontSize: 14,
+  },
   backBtn: {
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
+    marginBottom: 20,
   },
-  backBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 16,
+  backText: {
+    color: '#00F0FF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
   },
-  backArrow: { color: '#FFFFFF', fontSize: 24 },
-  headerTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 120, gap: 16 },
-  gameCard: {
+  hero: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 16,
+    backgroundColor: '#12121A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,240,255,0.12)',
     padding: 16,
   },
-  gameIcon: { width: 64, height: 64, borderRadius: 14 },
-  gameInfo: { flex: 1, marginLeft: 16 },
-  gameName: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-  serverName: { color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 4 },
-  statusBadge: {
-    flexDirection: 'row',
+  heroImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+  },
+  heroImagePlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,240,255,0.1)',
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  heroImageText: {
+    color: '#00F0FF',
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  heroInfo: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  gameName: {
+    color: '#EAEAEA',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  serverName: {
+    color: '#555570',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  rankBadge: {
+    backgroundColor: 'rgba(191,0,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(191,0,255,0.3)',
+    borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
     marginTop: 8,
     alignSelf: 'flex-start',
   },
-  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
-  statusText: { fontSize: 11, fontWeight: '600' },
-  detailCard: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 16,
-    padding: 16,
+  rankText: {
+    color: '#BF00FF',
+    fontSize: 12,
+    fontWeight: '600',
   },
-  detailRow: {
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0,240,255,0.08)',
+    marginVertical: 20,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    color: '#555570',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  description: {
+    color: '#EAEAEA',
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  durationRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
+    gap: 10,
+    flexWrap: 'wrap',
   },
-  detailLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
-  detailValue: { color: '#FFFFFF', fontSize: 14, fontWeight: '500' },
-  detailValueHighlight: { color: '#F59E0B', fontSize: 14, fontWeight: '600' },
-  detailDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)' },
-  descCard: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 16,
+  durationBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 6,
+    backgroundColor: '#12121A',
+    borderWidth: 1,
+    borderColor: 'rgba(0,240,255,0.1)',
+  },
+  durationBtnActive: {
+    backgroundColor: 'rgba(0,240,255,0.1)',
+    borderColor: '#00F0FF',
+  },
+  durationText: {
+    color: '#555570',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  durationTextActive: {
+    color: '#00F0FF',
+  },
+  priceSection: {
+    backgroundColor: '#12121A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,240,255,0.1)',
     padding: 16,
-  },
-  descTitle: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '600', marginBottom: 8 },
-  descText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, lineHeight: 22 },
-  priceCard: {
-    backgroundColor: 'rgba(99,102,241,0.08)',
-    borderRadius: 16,
-    padding: 20,
+    marginBottom: 24,
   },
   priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 8,
   },
-  priceLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
-  priceValueBox: { flexDirection: 'row', alignItems: 'baseline' },
-  priceCurrency: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  priceAmount: { color: '#FFFFFF', fontSize: 28, fontWeight: '700' },
-  priceUnit: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginLeft: 2 },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 34,
-    paddingTop: 16,
-    backgroundColor: '#0B0E1A',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+  priceLabel: {
+    color: '#555570',
+    fontSize: 13,
   },
-  launchBtn: {
-    backgroundColor: '#6366F1',
-    borderRadius: 14,
-    paddingVertical: 16,
+  priceValue: {
+    color: '#EAEAEA',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  priceDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,240,255,0.08)',
+    marginVertical: 4,
+  },
+  totalLabel: {
+    color: '#EAEAEA',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  totalValue: {
+    color: '#00F0FF',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  launchButton: {
+    backgroundColor: '#00F0FF',
+    borderRadius: 8,
+    paddingVertical: 18,
     alignItems: 'center',
+    shadowColor: '#00F0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  launchBtnDisabled: { backgroundColor: 'rgba(255,255,255,0.08)' },
-  launchBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
+  launchButtonText: {
+    color: '#0A0A0F',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 4,
+    textTransform: 'uppercase',
+  },
 });

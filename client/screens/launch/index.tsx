@@ -1,366 +1,470 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
-import { API_BASE_URL } from '@/utils/api';
-import { collectDeviceFingerprint, runSecurityCheck } from '@/utils/security';
+import { apiRequest } from '@/utils/api';
+import { collectDeviceInfo } from '@/utils/security';
 import Toast from 'react-native-toast-message';
 
-type LaunchStep = 'checking' | 'secure' | 'risky' | 'launching' | 'launched' | 'error';
+type LaunchPhase = 'detecting' | 'checking' | 'success' | 'denied' | 'active';
 
-interface AccountInfo {
-  id: number;
-  game_name: string;
-  game_icon: string | null;
-  account_name: string;
-  server_name: string | null;
-  rank_info: string | null;
-  price_per_hour: number;
+interface SecurityResult {
+  riskScore: number;
+  risks: string[];
+  action: string;
 }
 
 export default function LaunchScreen() {
   const router = useSafeRouter();
   const { token } = useAuth();
-  const { accountId } = useSafeSearchParams<{ accountId: number }>();
-  const [step, setStep] = useState<LaunchStep>('checking');
-  const [account, setAccount] = useState<AccountInfo | null>(null);
-  const [riskInfo, setRiskInfo] = useState<{ score: number; level: string; issues: string[] }>({ score: 0, level: 'low', issues: [] });
+  const { accountId, duration } = useSafeSearchParams<{ accountId: number; duration: number }>();
+  const [phase, setPhase] = useState<LaunchPhase>('detecting');
+  const [securityResult, setSecurityResult] = useState<SecurityResult | null>(null);
+  const [accountInfo, setAccountInfo] = useState<{ account_name: string; account_password: string } | null>(null);
   const [orderId, setOrderId] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(0);
-
-  // Fetch account info
-  useEffect(() => {
-    if (!accountId) return;
-    fetch(`${API_BASE_URL}/accounts/${accountId}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.account) setAccount(data.account);
-      })
-      .catch(() => {});
-  }, [accountId]);
-
-  // Run security check
-  const runCheck = useCallback(async () => {
-    setStep('checking');
-    try {
-      const fingerprint = await collectDeviceFingerprint();
-      const result = await runSecurityCheck(fingerprint, token);
-
-      if (result.risk_level === 'critical' || result.risk_level === 'high') {
-        setRiskInfo({
-          score: result.risk_score,
-          level: result.risk_level,
-          issues: result.issues || [],
-        });
-        setStep('risky');
-        return;
-      }
-
-      setStep('secure');
-      // Auto create order after 1.5s
-      setTimeout(() => createOrder(fingerprint), 1500);
-    } catch {
-      setStep('error');
-    }
-  }, [token]);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    runCheck();
-  }, [runCheck]);
+    startLaunchProcess();
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Create order and launch
-  const createOrder = async (fingerprint: string) => {
-    if (!accountId || !account) return;
-    setStep('launching');
-
+  const startLaunchProcess = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/orders/create`, {
+      // Phase 1: Device detection
+      setPhase('detecting');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const deviceInfo = await collectDeviceInfo();
+
+      // Report device to server
+      await apiRequest('/security/report-device', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+        body: deviceInfo,
+        token,
+      });
+
+      // Phase 2: Security check + Create order
+      setPhase('checking');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const orderData = await apiRequest<{
+        order: { id: number };
+        account: { account_name: string; account_password: string };
+        security: SecurityResult;
+      }>('/orders/create', {
+        method: 'POST',
+        body: {
           account_id: accountId,
-          duration_hours: 1,
-          device_fingerprint: fingerprint,
-        }),
+          duration_hours: duration,
+          ...deviceInfo,
+        },
+        token,
       });
 
-      const data = await response.json();
+      setSecurityResult(orderData.security);
+      setAccountInfo(orderData.account);
+      setOrderId(orderData.order.id);
 
-      if (!response.ok) {
-        Toast.show({ type: 'error', text1: data.error || '创建订单失败' });
-        setStep('error');
-        return;
+      if (orderData.security.action === 'deny') {
+        setPhase('denied');
+      } else {
+        setPhase('success');
+        setCountdown(duration * 3600);
+        // Start countdown
+        intervalRef.current = setInterval(() => {
+          setCountdown(prev => {
+            if (prev <= 0) {
+              if (intervalRef.current) clearInterval(intervalRef.current);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
       }
-
-      setOrderId(data.order.id);
-      setCountdown(data.order.duration_hours * 3600);
-
-      // Simulate launch delay
-      setTimeout(() => setStep('launched'), 2000);
-    } catch {
-      setStep('error');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '上号失败';
+      if (message.includes('安全检测未通过')) {
+        setPhase('denied');
+      } else {
+        Toast.show({ type: 'error', text1: message });
+        router.back();
+      }
     }
   };
 
-  // Countdown timer
-  useEffect(() => {
-    if (countdown <= 0 || step !== 'launched') return;
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleEndOrder();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [countdown, step]);
-
-  const handleEndOrder = async () => {
-    if (!orderId || !token) return;
+  const handleEndSession = async () => {
+    if (!orderId) return;
     try {
-      await fetch(`${API_BASE_URL}/orders/${orderId}/end`, {
+      await apiRequest(`/orders/${orderId}/end`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+        token,
       });
-    } catch {
-      // ignore
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      Toast.show({ type: 'success', text1: '已归还账号' });
+      router.replace('/');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '操作失败';
+      Toast.show({ type: 'error', text1: message });
     }
-    router.replace('/');
   };
 
-  const formatTime = (seconds: number) => {
+  const formatCountdown = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const renderChecking = () => (
-    <View style={styles.centerBox}>
-      <ActivityIndicator size="large" color="#6366F1" />
-      <Text style={styles.stepTitle}>正在检测环境安全...</Text>
-      <Text style={styles.stepDesc}>请稍候，正在扫描设备环境</Text>
-      <View style={styles.checkItems}>
-        {['Root/越狱检测', '模拟器检测', '悬浮窗检测', '可疑进程检测'].map((item, i) => (
-          <View key={item} style={styles.checkItem}>
-            <Text style={styles.checkDot}>◉</Text>
-            <Text style={styles.checkText}>{item}</Text>
+  // Detecting phase
+  if (phase === 'detecting') {
+    return (
+      <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+        <View style={styles.centerContainer}>
+          <ActivityIndicator color="#00F0FF" size="large" />
+          <Text style={styles.phaseTitle}>ENVIRONMENT DETECTION</Text>
+          <Text style={styles.phaseSubtitle}>正在检测设备环境安全...</Text>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: '40%' }]} />
           </View>
-        ))}
-      </View>
-    </View>
-  );
-
-  const renderSecure = () => (
-    <View style={styles.centerBox}>
-      <View style={[styles.iconCircle, { backgroundColor: 'rgba(34,197,94,0.12)' }]}>
-        <Text style={[styles.iconText, { color: '#22C55E' }]}>✓</Text>
-      </View>
-      <Text style={[styles.stepTitle, { color: '#22C55E' }]}>环境安全</Text>
-      <Text style={styles.stepDesc}>设备检测通过，正在准备上号...</Text>
-    </View>
-  );
-
-  const renderRisky = () => (
-    <View style={styles.centerBox}>
-      <View style={[styles.iconCircle, { backgroundColor: 'rgba(239,68,68,0.12)' }]}>
-        <Text style={[styles.iconText, { color: '#EF4444' }]}>✕</Text>
-      </View>
-      <Text style={[styles.stepTitle, { color: '#EF4444' }]}>环境异常</Text>
-      <Text style={styles.stepDesc}>检测到安全风险，已自动拒绝授权</Text>
-      <View style={styles.riskBox}>
-        <Text style={styles.riskLabel}>风险评分: {riskInfo.score}</Text>
-        {riskInfo.issues.map((issue, i) => (
-          <Text key={i} style={styles.riskIssue}>• {issue}</Text>
-        ))}
-      </View>
-      <Pressable style={styles.backBtn} onPress={() => router.replace('/')}>
-        <Text style={styles.backBtnText}>返回首页</Text>
-      </Pressable>
-    </View>
-  );
-
-  const renderLaunching = () => (
-    <View style={styles.centerBox}>
-      <ActivityIndicator size="large" color="#6366F1" />
-      <Text style={styles.stepTitle}>正在上号...</Text>
-      <Text style={styles.stepDesc}>正在连接游戏服务器，请勿关闭应用</Text>
-    </View>
-  );
-
-  const renderLaunched = () => (
-    <View style={styles.centerBox}>
-      <Image
-        source={{ uri: account?.game_icon || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=200' }}
-        style={styles.gameImage}
-      />
-      <Text style={styles.launchedTitle}>{account?.game_name || '游戏'}</Text>
-      <Text style={styles.launchedSubtitle}>上号成功，正在游戏中</Text>
-
-      <View style={styles.timerBox}>
-        <Text style={styles.timerLabel}>剩余时间</Text>
-        <Text style={styles.timerValue}>{formatTime(countdown)}</Text>
-      </View>
-
-      <View style={styles.sessionInfo}>
-        <View style={styles.sessionRow}>
-          <Text style={styles.sessionLabel}>账号</Text>
-          <Text style={styles.sessionValue}>{account?.account_name || '---'}</Text>
         </View>
-        <View style={styles.sessionDivider} />
-        <View style={styles.sessionRow}>
-          <Text style={styles.sessionLabel}>区服</Text>
-          <Text style={styles.sessionValue}>{account?.server_name || '---'}</Text>
+      </Screen>
+    );
+  }
+
+  // Checking phase
+  if (phase === 'checking') {
+    return (
+      <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+        <View style={styles.centerContainer}>
+          <ActivityIndicator color="#BF00FF" size="large" />
+          <Text style={styles.phaseTitle}>SECURITY CHECK</Text>
+          <Text style={styles.phaseSubtitle}>正在进行安全验证...</Text>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: '75%', backgroundColor: '#BF00FF' }]} />
+          </View>
         </View>
-      </View>
+      </Screen>
+    );
+  }
 
-      <Pressable style={styles.endBtn} onPress={handleEndOrder}>
-        <Text style={styles.endBtnText}>结束上号</Text>
-      </Pressable>
-    </View>
-  );
+  // Denied phase
+  if (phase === 'denied') {
+    return (
+      <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+        <View style={styles.centerContainer}>
+          <View style={styles.deniedIcon}>
+            <Text style={styles.deniedIconText}>X</Text>
+          </View>
+          <Text style={styles.deniedTitle}>ACCESS DENIED</Text>
+          <Text style={styles.deniedSubtitle}>安全检测未通过</Text>
 
-  const renderError = () => (
-    <View style={styles.centerBox}>
-      <View style={[styles.iconCircle, { backgroundColor: 'rgba(239,68,68,0.12)' }]}>
-        <Text style={[styles.iconText, { color: '#EF4444' }]}>!</Text>
-      </View>
-      <Text style={styles.stepTitle}>上号失败</Text>
-      <Text style={styles.stepDesc}>请检查网络连接后重试</Text>
-      <Pressable style={styles.retryBtn} onPress={runCheck}>
-        <Text style={styles.retryBtnText}>重试</Text>
-      </Pressable>
-      <Pressable style={styles.backBtn} onPress={() => router.replace('/')}>
-        <Text style={styles.backBtnText}>返回首页</Text>
-      </Pressable>
-    </View>
-  );
+          {securityResult?.risks && securityResult.risks.length > 0 && (
+            <View style={styles.riskList}>
+              {securityResult.risks.map((risk, i) => (
+                <View key={i} style={styles.riskItem}>
+                  <Text style={styles.riskDot}>!</Text>
+                  <Text style={styles.riskText}>{risk}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
-  const renderStep = () => {
-    switch (step) {
-      case 'checking': return renderChecking();
-      case 'secure': return renderSecure();
-      case 'risky': return renderRisky();
-      case 'launching': return renderLaunching();
-      case 'launched': return renderLaunched();
-      case 'error': return renderError();
-    }
-  };
-
-  return (
-    <Screen backgroundColor="#0B0E1A" statusBarStyle="light">
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={10}>
-            <Text style={styles.backArrow}>←</Text>
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>返回</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>安全上号</Text>
-          <View style={{ width: 24 }} />
+        </View>
+      </Screen>
+    );
+  }
+
+  // Success / Active phase
+  return (
+    <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+      <View style={styles.activeContainer}>
+        {/* Status header */}
+        <View style={styles.statusHeader}>
+          <View style={styles.activeBadge}>
+            <View style={styles.activeDot} />
+            <Text style={styles.activeText}>SESSION ACTIVE</Text>
+          </View>
+          <Text style={styles.countdown}>{formatCountdown(countdown)}</Text>
+          <Text style={styles.countdownLabel}>剩余时间</Text>
         </View>
 
-        {renderStep()}
+        {/* Account info */}
+        <View style={styles.accountCard}>
+          <Text style={styles.cardLabel}>GAME ACCOUNT</Text>
+          <Text style={styles.cardValue}>{accountInfo?.account_name || '---'}</Text>
+
+          <View style={styles.divider} />
+
+          <Text style={styles.cardLabel}>PASSWORD</Text>
+          <Text style={styles.cardValueMono}>{accountInfo?.account_password || '---'}</Text>
+
+          {securityResult && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.securityRow}>
+                <Text style={styles.cardLabel}>RISK SCORE</Text>
+                <Text style={[
+                  styles.riskScoreValue,
+                  { color: securityResult.riskScore >= 40 ? '#FFB800' : '#00FF88' },
+                ]}>
+                  {securityResult.riskScore}
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* Warning */}
+        <View style={styles.warningCard}>
+          <Text style={styles.warningTitle}>SECURITY NOTICE</Text>
+          <Text style={styles.warningText}>
+            请勿使用任何第三方外挂软件。系统将持续监控您的游戏环境，检测到违规行为将自动终止会话并封禁设备。
+          </Text>
+        </View>
+
+        {/* Action buttons */}
+        <View style={styles.actionArea}>
+          <Pressable style={styles.endButton} onPress={handleEndSession}>
+            <Text style={styles.endButtonText}>归还账号</Text>
+          </Pressable>
+        </View>
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 16,
-  },
-  backArrow: { color: '#FFFFFF', fontSize: 24 },
-  headerTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
-  centerBox: {
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
   },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  phaseTitle: {
+    color: '#EAEAEA',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 4,
+    marginTop: 24,
+  },
+  phaseSubtitle: {
+    color: '#555570',
+    fontSize: 13,
+    marginTop: 8,
+  },
+  progressBar: {
+    width: '80%',
+    height: 3,
+    backgroundColor: '#1E1E2E',
+    borderRadius: 2,
+    marginTop: 24,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#00F0FF',
+    borderRadius: 2,
+  },
+  deniedIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: '#FF003C',
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,0,60,0.1)',
+  },
+  deniedIconText: {
+    color: '#FF003C',
+    fontSize: 32,
+    fontWeight: '800',
+  },
+  deniedTitle: {
+    color: '#FF003C',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 4,
+    marginTop: 20,
+  },
+  deniedSubtitle: {
+    color: '#555570',
+    fontSize: 14,
+    marginTop: 8,
+  },
+  riskList: {
+    marginTop: 24,
+    backgroundColor: '#12121A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,0,60,0.2)',
+    padding: 16,
+    width: '100%',
+    gap: 10,
+  },
+  riskItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  riskDot: {
+    color: '#FF003C',
+    fontSize: 14,
+    fontWeight: '800',
+    width: 20,
+    textAlign: 'center',
+  },
+  riskText: {
+    color: '#EAEAEA',
+    fontSize: 13,
+    flex: 1,
+  },
+  backButton: {
+    marginTop: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(0,240,255,0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+  },
+  backButtonText: {
+    color: '#00F0FF',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  activeContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 60,
+  },
+  statusHeader: {
     alignItems: 'center',
     marginBottom: 24,
   },
-  iconText: { fontSize: 36, fontWeight: '700' },
-  stepTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', marginTop: 8 },
-  stepDesc: { color: 'rgba(255,255,255,0.45)', fontSize: 14, marginTop: 8, textAlign: 'center' },
-  checkItems: { marginTop: 32, gap: 12, width: '100%' },
-  checkItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  checkDot: { color: '#6366F1', fontSize: 14 },
-  checkText: { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
-  riskBox: {
-    marginTop: 24,
-    backgroundColor: 'rgba(239,68,68,0.08)',
-    borderRadius: 12,
-    padding: 16,
-    width: '100%',
-  },
-  riskLabel: { color: '#EF4444', fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  riskIssue: { color: 'rgba(239,68,68,0.7)', fontSize: 13, marginTop: 4 },
-  gameImage: { width: 80, height: 80, borderRadius: 16, marginBottom: 16 },
-  launchedTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '700' },
-  launchedSubtitle: { color: 'rgba(255,255,255,0.45)', fontSize: 14, marginTop: 6 },
-  timerBox: {
-    marginTop: 32,
-    backgroundColor: 'rgba(99,102,241,0.1)',
-    borderRadius: 16,
-    padding: 20,
+  activeBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
-  },
-  timerLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
-  timerValue: { color: '#FFFFFF', fontSize: 36, fontWeight: '700', marginTop: 4, fontVariant: ['tabular-nums'] },
-  sessionInfo: {
-    marginTop: 16,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 12,
-    padding: 16,
-    width: '100%',
-  },
-  sessionRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  sessionLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 13 },
-  sessionValue: { color: '#FFFFFF', fontSize: 13, fontWeight: '500' },
-  sessionDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: 10 },
-  endBtn: {
-    marginTop: 24,
-    backgroundColor: 'rgba(239,68,68,0.12)',
+    gap: 8,
+    backgroundColor: 'rgba(0,255,136,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.3)',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
+    borderColor: 'rgba(0,255,136,0.2)',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginBottom: 16,
   },
-  endBtnText: { color: '#EF4444', fontSize: 15, fontWeight: '600' },
-  retryBtn: {
-    marginTop: 24,
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
+  activeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00FF88',
   },
-  retryBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
-  backBtn: {
-    marginTop: 12,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
+  activeText: {
+    color: '#00FF88',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
   },
-  backBtnText: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
+  countdown: {
+    color: '#00F0FF',
+    fontSize: 48,
+    fontWeight: '800',
+    letterSpacing: 4,
+  },
+  countdownLabel: {
+    color: '#555570',
+    fontSize: 12,
+    letterSpacing: 2,
+    marginTop: 4,
+  },
+  accountCard: {
+    backgroundColor: '#12121A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,240,255,0.12)',
+    padding: 20,
+    marginBottom: 16,
+  },
+  cardLabel: {
+    color: '#555570',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  cardValue: {
+    color: '#EAEAEA',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  cardValueMono: {
+    color: '#00F0FF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0,240,255,0.06)',
+    marginVertical: 16,
+  },
+  securityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  riskScoreValue: {
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  warningCard: {
+    backgroundColor: 'rgba(255,184,0,0.05)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,184,0,0.2)',
+    padding: 16,
+    marginBottom: 24,
+  },
+  warningTitle: {
+    color: '#FFB800',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  warningText: {
+    color: '#EAEAEA',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  actionArea: {
+    marginTop: 'auto',
+    paddingBottom: 40,
+  },
+  endButton: {
+    borderWidth: 1,
+    borderColor: '#FF003C',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,0,60,0.05)',
+  },
+  endButtonText: {
+    color: '#FF003C',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+  },
 });

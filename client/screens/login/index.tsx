@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { Screen } from '@/components/Screen';
@@ -22,7 +22,7 @@ export default function LoginScreen() {
       await login(username.trim(), password);
       Toast.show({ type: 'success', text1: '登录成功' });
     } catch (err) {
-      const message = err instanceof Error ? err.message : '登录失败，请检查用户名和密码';
+      const message = err instanceof Error ? err.message : '登录失败';
       Toast.show({ type: 'error', text1: message });
     } finally {
       setLoading(false);
@@ -30,42 +30,38 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen backgroundColor="#0B0E1A" statusBarStyle="light">
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoBox}>
-            <View style={styles.logoInner}>
-              <Text style={styles.logoIcon}>🛡</Text>
-            </View>
+    <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+      <View style={styles.container}>
+        {/* Logo Area */}
+        <View style={styles.logoArea}>
+          <View style={styles.shieldIcon}>
+            <Text style={styles.shieldText}>SL</Text>
           </View>
-          <Text style={styles.title}>游戏安全上号器</Text>
-          <Text style={styles.subtitle}>专业账号租赁 · 安全加密上号</Text>
+          <Text style={styles.appName}>SHIELDLINK</Text>
+          <Text style={styles.tagline}>游戏账号安全上号平台</Text>
+          <View style={styles.glowLine} />
         </View>
 
         {/* Form */}
         <View style={styles.form}>
-          <View style={styles.inputWrapper}>
-            <Text style={styles.inputLabel}>账号</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>USERNAME</Text>
             <TextInput
               style={styles.input}
               placeholder="请输入用户名"
-              placeholderTextColor="rgba(255,255,255,0.25)"
+              placeholderTextColor="#555570"
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
             />
           </View>
 
-          <View style={styles.inputWrapper}>
-            <Text style={styles.inputLabel}>密码</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>PASSWORD</Text>
             <TextInput
               style={styles.input}
               placeholder="请输入密码"
-              placeholderTextColor="rgba(255,255,255,0.25)"
+              placeholderTextColor="#555570"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -73,28 +69,32 @@ export default function LoginScreen() {
           </View>
 
           <Pressable
-            style={[styles.loginBtn, loading && styles.loginBtnDisabled]}
+            style={[styles.loginButton, loading && styles.disabledButton]}
             onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#0A0A0F" />
             ) : (
-              <Text style={styles.loginBtnText}>登 录</Text>
+              <Text style={styles.loginButtonText}>安全登录</Text>
             )}
           </Pressable>
 
-          <Pressable style={styles.registerRow} onPress={() => router.push('/register')}>
-            <Text style={styles.registerHint}>还没有账号？</Text>
-            <Text style={styles.registerLink}>立即注册</Text>
+          <Pressable
+            style={styles.registerLink}
+            onPress={() => router.push('/register')}
+          >
+            <Text style={styles.registerText}>没有账号？</Text>
+            <Text style={styles.registerHighlight}>立即注册</Text>
           </Pressable>
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>安全加密 · 防外挂检测 · 自动拒绝风险设备</Text>
+        {/* Bottom decoration */}
+        <View style={styles.bottomArea}>
+          <View style={styles.scanLine} />
+          <Text style={styles.securityText}>SECURE CONNECTION ESTABLISHED</Text>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }
@@ -102,101 +102,133 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
     justifyContent: 'center',
   },
-  header: {
+  logoArea: {
     alignItems: 'center',
     marginBottom: 48,
   },
-  logoBox: {
-    marginBottom: 20,
-  },
-  logoInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(99,102,241,0.15)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(99,102,241,0.4)',
+  shieldIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#00F0FF',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0,240,255,0.05)',
+    shadowColor: '#00F0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
+    marginBottom: 16,
   },
-  logoIcon: {
-    fontSize: 28,
-  },
-  title: {
-    color: '#FFFFFF',
+  shieldText: {
+    color: '#00F0FF',
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  appName: {
+    color: '#EAEAEA',
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 6,
+  },
+  tagline: {
+    color: '#555570',
+    fontSize: 13,
+    marginTop: 8,
     letterSpacing: 1,
   },
-  subtitle: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 13,
-    marginTop: 8,
+  glowLine: {
+    width: 60,
+    height: 2,
+    marginTop: 16,
+    backgroundColor: '#00F0FF',
+    borderRadius: 1,
+    shadowColor: '#00F0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
   },
   form: {
-    gap: 16,
+    gap: 20,
   },
-  inputWrapper: {
-    gap: 6,
+  inputGroup: {
+    gap: 8,
   },
-  inputLabel: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    fontWeight: '500',
-    paddingLeft: 4,
+  label: {
+    color: '#555570',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   input: {
-    height: 50,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 12,
+    backgroundColor: '#12121A',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(0,240,255,0.15)',
+    borderRadius: 8,
     paddingHorizontal: 16,
-    color: '#FFFFFF',
+    paddingVertical: 14,
+    color: '#EAEAEA',
     fontSize: 15,
   },
-  loginBtn: {
-    height: 50,
-    borderRadius: 12,
-    backgroundColor: '#6366F1',
-    justifyContent: 'center',
+  loginButton: {
+    backgroundColor: '#00F0FF',
+    borderRadius: 8,
+    paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
+    shadowColor: '#00F0FF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  loginBtnDisabled: {
+  disabledButton: {
     opacity: 0.6,
   },
-  loginBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 4,
+  loginButtonText: {
+    color: '#0A0A0F',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 3,
+    textTransform: 'uppercase',
   },
-  registerRow: {
+  registerLink: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
     gap: 4,
   },
-  registerHint: {
-    color: 'rgba(255,255,255,0.4)',
+  registerText: {
+    color: '#555570',
     fontSize: 13,
   },
-  registerLink: {
-    color: '#6366F1',
+  registerHighlight: {
+    color: '#00F0FF',
     fontSize: 13,
     fontWeight: '600',
   },
-  footer: {
+  bottomArea: {
     alignItems: 'center',
     marginTop: 48,
   },
-  footerText: {
-    color: 'rgba(255,255,255,0.2)',
-    fontSize: 11,
+  scanLine: {
+    width: '100%',
+    height: 1,
+    backgroundColor: 'rgba(0,240,255,0.08)',
+    marginBottom: 16,
+  },
+  securityText: {
+    color: '#555570',
+    fontSize: 10,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
   },
 });
