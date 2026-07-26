@@ -13,8 +13,12 @@ export default function ProfileScreen() {
     }, [refreshUser])
   );
 
+  const handleLogout = async () => {
+    await logout();
+  };
+
   return (
-    <Screen backgroundColor="#0A0A0F" statusBarStyle="light">
+    <Screen backgroundColor="#0F0F1A" statusBarStyle="light">
       <ScrollView contentContainerStyle={styles.container}>
         {/* Profile header */}
         <View style={styles.profileHeader}>
@@ -23,21 +27,19 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.username}>{user?.username || 'Unknown'}</Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{user?.role === 'admin' ? 'ADMIN' : 'USER'}</Text>
+            <Text style={styles.roleText}>{user?.role === 'admin' ? '管理员' : '普通用户'}</Text>
           </View>
         </View>
 
         {/* Balance card */}
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>ACCOUNT BALANCE</Text>
+          <Text style={styles.balanceLabel}>账户余额</Text>
           <Text style={styles.balanceValue}>¥{user?.balance?.toFixed(2) || '0.00'}</Text>
-          <View style={styles.balanceGlow} />
         </View>
 
         {/* Info section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ACCOUNT INFO</Text>
-
+          <Text style={styles.sectionTitle}>账号信息</Text>
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>用户ID</Text>
@@ -61,48 +63,58 @@ export default function ProfileScreen() {
 
         {/* Security section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SECURITY</Text>
-
+          <Text style={styles.sectionTitle}>安全保障</Text>
           <View style={styles.securityCard}>
             <View style={styles.securityItem}>
               <View style={styles.securityIcon}>
-                <Text style={styles.securityIconText}>S</Text>
+                <Text style={styles.securityIconText}>🛡️</Text>
               </View>
               <View style={styles.securityInfo}>
                 <Text style={styles.securityTitle}>设备安全</Text>
                 <Text style={styles.securityDesc}>设备环境已检测</Text>
               </View>
-              <View style={styles.securityStatus}>
-                <Text style={styles.securityOk}>OK</Text>
+              <View style={styles.securityOk}>
+                <Text style={styles.securityOkText}>安全</Text>
               </View>
             </View>
-
             <View style={styles.securityDivider} />
-
             <View style={styles.securityItem}>
-              <View style={[styles.securityIcon, { backgroundColor: 'rgba(0,255,136,0.1)' }]}>
-                <Text style={[styles.securityIconText, { color: '#00FF88' }]}>P</Text>
+              <View style={[styles.securityIcon, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
+                <Text style={styles.securityIconText}>🔒</Text>
               </View>
               <View style={styles.securityInfo}>
                 <Text style={styles.securityTitle}>隐私保护</Text>
                 <Text style={styles.securityDesc}>账号密码加密存储</Text>
               </View>
-              <View style={styles.securityStatus}>
-                <Text style={styles.securityOk}>OK</Text>
+              <View style={styles.securityOk}>
+                <Text style={styles.securityOkText}>安全</Text>
+              </View>
+            </View>
+            <View style={styles.securityDivider} />
+            <View style={styles.securityItem}>
+              <View style={[styles.securityIcon, { backgroundColor: 'rgba(139,92,246,0.1)' }]}>
+                <Text style={styles.securityIconText}>🚫</Text>
+              </View>
+              <View style={styles.securityInfo}>
+                <Text style={styles.securityTitle}>外挂拦截</Text>
+                <Text style={styles.securityDesc}>自动检测并拦截外挂</Text>
+              </View>
+              <View style={styles.securityOk}>
+                <Text style={styles.securityOkText}>开启</Text>
               </View>
             </View>
           </View>
         </View>
 
         {/* Logout button */}
-        <Pressable style={styles.logoutButton} onPress={logout}>
+        <Pressable style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>退出登录</Text>
         </Pressable>
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>SHIELDLINK v1.0.0</Text>
-          <Text style={styles.footerSubtext}>Secure Gaming Platform</Text>
+          <Text style={styles.footerText}>极速上号 v1.0.0</Text>
+          <Text style={styles.footerSubtext}>安全 · 快速 · 稳定</Text>
         </View>
       </ScrollView>
     </Screen>
@@ -110,230 +122,67 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 40,
-  },
-  profileHeader: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
+  container: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 40 },
+  profileHeader: { alignItems: 'center', marginBottom: 20 },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 2,
-    borderColor: '#00F0FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,240,255,0.05)',
-    shadowColor: '#00F0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: '#6366F1', justifyContent: 'center', alignItems: 'center',
+    marginBottom: 12,
   },
-  avatarText: {
-    color: '#00F0FF',
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  username: {
-    color: '#EAEAEA',
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 12,
-  },
+  avatarText: { color: '#fff', fontSize: 28, fontWeight: '700' },
+  username: { fontSize: 20, fontWeight: '700', color: '#fff' },
   roleBadge: {
-    backgroundColor: 'rgba(191,0,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(191,0,255,0.3)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginTop: 8,
+    marginTop: 6, paddingHorizontal: 12, paddingVertical: 4,
+    backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12,
   },
-  roleText: {
-    color: '#BF00FF',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
+  roleText: { color: '#6366F1', fontSize: 12, fontWeight: '600' },
   balanceCard: {
-    backgroundColor: '#12121A',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.15)',
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#00F0FF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+    backgroundColor: '#1A1A2E', borderRadius: 16, padding: 20,
+    alignItems: 'center', marginBottom: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  balanceLabel: {
-    color: '#555570',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-  },
-  balanceValue: {
-    color: '#00FF88',
-    fontSize: 36,
-    fontWeight: '800',
-    marginTop: 8,
-  },
-  balanceGlow: {
-    width: 40,
-    height: 2,
-    backgroundColor: '#00FF88',
-    borderRadius: 1,
-    marginTop: 12,
-    shadowColor: '#00FF88',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    color: '#555570',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-  },
+  balanceLabel: { fontSize: 13, color: '#888', marginBottom: 6 },
+  balanceValue: { fontSize: 32, fontWeight: '700', color: '#F59E0B' },
+  section: { marginBottom: 20 },
+  sectionTitle: { fontSize: 14, fontWeight: '600', color: '#888', marginBottom: 10, letterSpacing: 1 },
   infoCard: {
-    backgroundColor: '#12121A',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.08)',
-    padding: 16,
+    backgroundColor: '#1A1A2E', borderRadius: 16, padding: 4,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  infoDivider: {
-    height: 1,
-    backgroundColor: 'rgba(0,240,255,0.04)',
-  },
-  infoLabel: {
-    color: '#555570',
-    fontSize: 13,
-  },
-  infoValue: {
-    color: '#EAEAEA',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#00FF88',
-  },
-  statusText: {
-    color: '#00FF88',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 14 },
+  infoLabel: { fontSize: 14, color: '#888' },
+  infoValue: { fontSize: 14, color: '#E5E7EB', fontWeight: '500' },
+  infoDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 14 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
+  statusText: { color: '#10B981', fontSize: 13, fontWeight: '500' },
   securityCard: {
-    backgroundColor: '#12121A',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0,240,255,0.08)',
-    padding: 16,
+    backgroundColor: '#1A1A2E', borderRadius: 16, padding: 4,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  securityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
+  securityItem: { flexDirection: 'row', alignItems: 'center', padding: 14 },
   securityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,240,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: 'rgba(99,102,241,0.1)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  securityIconText: {
-    color: '#00F0FF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  securityInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  securityTitle: {
-    color: '#EAEAEA',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  securityDesc: {
-    color: '#555570',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  securityStatus: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(0,255,136,0.08)',
-    borderRadius: 6,
-  },
+  securityIconText: { fontSize: 18 },
+  securityInfo: { flex: 1, marginLeft: 12 },
+  securityTitle: { fontSize: 14, fontWeight: '600', color: '#E5E7EB' },
+  securityDesc: { fontSize: 12, color: '#888', marginTop: 2 },
   securityOk: {
-    color: '#00FF88',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
+    paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: 'rgba(16,185,129,0.1)', borderRadius: 8,
   },
-  securityDivider: {
-    height: 1,
-    backgroundColor: 'rgba(0,240,255,0.04)',
-    marginVertical: 4,
-  },
+  securityOkText: { color: '#10B981', fontSize: 12, fontWeight: '600' },
+  securityDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 14 },
   logoutButton: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,0,60,0.3)',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 16,
-    backgroundColor: 'rgba(255,0,60,0.03)',
+    backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 14,
+    paddingVertical: 16, alignItems: 'center', marginTop: 10,
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)',
   },
-  logoutText: {
-    color: '#FF003C',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-  },
-  footer: {
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  footerText: {
-    color: '#555570',
-    fontSize: 11,
-    letterSpacing: 2,
-  },
-  footerSubtext: {
-    color: '#333348',
-    fontSize: 10,
-    letterSpacing: 1,
-    marginTop: 4,
-  },
+  logoutText: { color: '#EF4444', fontSize: 15, fontWeight: '600' },
+  footer: { alignItems: 'center', marginTop: 24 },
+  footerText: { color: '#555', fontSize: 12 },
+  footerSubtext: { color: '#444', fontSize: 11, marginTop: 4 },
 });

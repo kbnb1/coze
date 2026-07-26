@@ -17,7 +17,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, phone?: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
-    const data = await apiRequest<{ token: string; user: User }>('/auth/login', {
+    const data = await apiRequest<{ token: string; user: User; message: string }>('/auth/login', {
       method: 'POST',
       body: { username, password },
     });
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(async (username: string, password: string, phone?: string) => {
-    const data = await apiRequest<{ token: string; user: User }>('/auth/register', {
+    const data = await apiRequest<{ token: string; user: User; message: string }>('/auth/register', {
       method: 'POST',
       body: { username, password, phone },
     });
@@ -84,7 +84,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data.user);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
     } catch {
-      // token expired
       await logout();
     }
   }, [token, logout]);
